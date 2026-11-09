@@ -1,15 +1,22 @@
+#include <Python.h>
 #include <sys/ioctl.h>
 #include <stdio.h>
 #include <unistd.h>
 #include <math.h>
 #include <stdint.h>
-#include <Python.h>
 
-#define RATIO_X 1
-#define RATIO_Y 2
 
-int main(void)
+#define RATIO_X 0.5
+#define RATIO_Y 1
+
+int main(int argc, char *argv[])
 {
+  if(argc < 2){
+    printf("Not enough args\n");
+    return 1;
+  }
+
+
   PyObject *name, *load_module, *func, *callfunc, *args;
   Py_Initialize();
   PyObject *sys_path = PySys_GetObject("path");
@@ -19,15 +26,29 @@ int main(void)
     PyList_Append(sys_path, current_dir);
   }
   Py_XDECREF(current_dir);
-  name = PyUnicode_FromString("sample");
+  name = PyUnicode_FromString(argv[1]);
   load_module = PyImport_Import(name);
   Py_DECREF(name);
+  if (!load_module)
+  {
+    PyErr_Print();
+    Py_Finalize();
+    return 1;
+  }
   func = PyObject_GetAttrString(load_module, "function");
+  if (!func || !PyCallable_Check(func))
+  {
+    PyErr_Print();
+    Py_XDECREF(func);
+    Py_DECREF(load_module);
+    Py_Finalize();
+    return 1;
+  }
 
   struct winsize ws;
   ioctl(STDIN_FILENO, TIOCGWINSZ, &ws);
 
-  int h = ws.ws_row / 2 - 2;
+  int h = ws.ws_row / 2;
   int w = ws.ws_col / 2;
   for (int y = h; y > -h; y--)
   {
@@ -44,7 +65,7 @@ int main(void)
       whatsToWrite |= (x == 0) << 6;
       whatsToWrite |= (yAxis == y) << 5;
       if (whatsToWrite & 1u << 5)
-        printf("▩");
+        printf("█");
       else if (whatsToWrite & 1u << 6 && whatsToWrite & 1u << 7)
         printf("┼");
       else if (whatsToWrite & 1u << 6)
@@ -57,8 +78,6 @@ int main(void)
     printf("\n");
   }
 
-  Py_DECREF(args);
-  Py_DECREF(callfunc);
   Py_DECREF(func);
   Py_DECREF(load_module);
   Py_Finalize();
